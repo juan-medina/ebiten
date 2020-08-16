@@ -15,7 +15,6 @@
 package ebiten
 
 import (
-	"log"
 	"fmt"
 	"math"
 	"sync"
@@ -349,7 +348,5 @@ func (c *uiContext) AdjustPosition(x, y float64) (float64, float64) {
 	d := uiDriver().DeviceScaleFactor()
 	ox, oy := c.offsets()
 	s := c.screenScale()
-	rx, ry := (x*d - ox) / s, (y*d - oy) / s
-	log.Printf("AdjustPosition %f, %f \n", rx, ry)
-	return rx, ry
+	return (x*d - ox) / s, (y*d - oy) / s
 }
