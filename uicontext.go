@@ -16,6 +16,7 @@ package ebiten
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -320,6 +321,7 @@ func (c *uiContext) draw() {
 	op := &DrawImageOptions{}
 
 	s := c.screenScale()
+	log.Printf("screen scale on draw: %f", s)
 	switch vd := uiDriver().Graphics().FramebufferYDirection(); vd {
 	case driver.Upward:
 		op.GeoM.Scale(s, -s)
