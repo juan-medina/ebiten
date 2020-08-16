@@ -19,8 +19,12 @@
 package devicescale
 
 import (
+	"encoding/xml"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -95,6 +99,73 @@ func cinnamonScale() float64 {
 	return float64(s)
 }
 
+// custom bool for mapping "true"/"yes"/"on" to true
+type XmlBool bool
+
+// unmarshal from string to XmlBool
+func (b *XmlBool) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var s string
+	if err := d.DecodeElement(&s, &start); err != nil {
+		return err
+	}
+
+	*b = XmlBool((s == "yes") || (s == "true") || (s == "on"))
+
+	return nil
+}
+
+// cinnamon monitors config, strip out fields that are not needed
+type cinnamonMonitorsConfig struct {
+	XMLName       xml.Name `xml:"monitors"`
+	Version       string   `xml:"version,attr"`
+	Configuration struct {
+		BaseScale float64 `xml:"base_scale"`
+		Output    []struct {
+			Scale    float64 `xml:"scale"`
+			Primary  XmlBool `xml:"primary"`
+		} `xml:"output"`
+	} `xml:"configuration"`
+}
+
+const (
+	//cinnamon default config file
+	cinnamonCfg = ".config/cinnamon-monitors.xml"
+)
+
+func getCinnamonPrimaryMonitorScale() (scale float64) {
+	scale = 0
+	// getting current user is cached
+	usr, _ := user.Current()
+	if xmlFile, err := os.Open(filepath.Join(usr.HomeDir, cinnamonCfg)); err == nil {
+		//goland:noinspection GoUnhandledErrorResult
+		defer xmlFile.Close()
+		if byteValue, err := ioutil.ReadAll(xmlFile); err == nil {
+			var monitors cinnamonMonitorsConfig
+			if err = xml.Unmarshal(byteValue, &monitors); err == nil {
+				// base scale for all monitors
+				scale = monitors.Configuration.BaseScale
+				// for each monitor, get primary monitor scale
+				for _, v := range monitors.Configuration.Output {
+					if v.Primary {
+						// we could not have a scale per monitor
+						if v.Scale != 0.0 {
+							scale = v.Scale
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// retro-compatibility / fallback
+	if scale == 0 {
+		scale = cinnamonScale()
+	}
+
+	return
+}
+
 func impl(x, y int) float64 {
 	s := -1.0
 	switch currentDesktop() {
@@ -102,7 +173,7 @@ func impl(x, y int) float64 {
 		// TODO: Support wayland and per-monitor scaling https://wiki.gnome.org/HowDoI/HiDpi
 		s = gnomeScale()
 	case desktopCinnamon:
-		s = cinnamonScale()
+		s = getCinnamonPrimaryMonitorScale()
 	case desktopUnity:
 		// TODO: Implement, supports per-monitor scaling
 	case desktopKDE:
